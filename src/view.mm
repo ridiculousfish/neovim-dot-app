@@ -27,6 +27,27 @@ static void addModifiedName(std::ostream &os, NSEvent *event, const char *name)
         ">";
 }
 
+static void invertRect(NSBitmapImageRep *bitmap, CGRect pixelRect)
+{
+    int y0 = pixelRect.origin.y;
+    int x0 = pixelRect.origin.x;
+
+    std::cout << y0 << "\n";
+
+    int y1 = y0 + pixelRect.size.height;
+    int x1 = x0 + pixelRect.size.width;
+
+    NSUInteger pixel[4];
+    for (int y=y0; y < y1; y++)
+    for (int x=x0; x < x1; x++) {
+        [bitmap getPixel:pixel atX:x y:y];
+        pixel[1] = 0xff - pixel[1];
+        pixel[2] = 0xff - pixel[2];
+        pixel[3] = 0xff - pixel[3];
+        [bitmap setPixel:pixel atX:x y:y];
+    }
+}
+
 - (id)initWithFrame:(NSRect)frame vim:(Vim *)vim
 {
     if (self = [super initWithFrame:frame]) {
@@ -192,28 +213,44 @@ static void addModifiedName(std::ostream &os, NSEvent *event, const char *name)
 
 - (void)drawRect:(NSRect)rect
 {
-    [mCanvas drawInRect:rect fromRect:rect operation:NSCompositeCopy fraction:1.0];
     [self drawCursor];
+    [mCanvas drawInRect:rect fromRect:rect operation:NSCompositeCopy fraction:1.0];
 }
 
-/* Draw a shitty cursor. TODO: Either:
-    1) Figure out how to make Cocoa invert the display at the cursor pos
-    2) Start keeping a screen character buffer */
+/* Draw the cursor. We only draw it if it's moved since we last drew it. If it
+   has, just invert a cell at both its old and new positions.
+*/
 - (void)drawCursor
 {
-    NSRect cellRect;
+    if (CGPointEqualToPoint(mCursorDisplayPos, mLastShownCursorPos))
+        return;
 
-    float x = mCursorDisplayPos.x;
-    float y = mCursorDisplayPos.y;
+    NSPoint points[] = {mLastShownCursorPos, mCursorDisplayPos};
 
-    if (mInsertMode)
-        cellRect = CGRectMake(x, y, .2, 1);
-    else
-        cellRect = CGRectMake(x, y+1, 1, .3);
+    for (int i=0; i<2; i++) {
 
-    NSRect viewRect = [self viewRectFromCellRect:cellRect];
-    [mForegroundColor set];
-    NSRectFill(viewRect);
+        const NSPoint &point = points[i];
+        const float &x = point.x;
+        const float &y = point.y;
+
+        NSRect cellRect;
+
+        if (mInsertMode)
+            cellRect = CGRectMake(x, y, .2, 1);
+        else
+            cellRect = CGRectMake(x, y, 1, 1);
+
+        NSRect viewRect = [self viewRectFromCellRect:cellRect];
+
+        NSRect pixelRect = [self convertRectToBacking:viewRect];
+
+        pixelRect.origin.y =
+            [mCanvasBitmap pixelsHigh] - pixelRect.origin.y
+            - pixelRect.size.height;
+
+        invertRect(mCanvasBitmap, pixelRect);
+    }
+    mLastShownCursorPos = mCursorDisplayPos;
 }
 
 

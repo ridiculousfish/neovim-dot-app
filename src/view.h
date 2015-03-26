@@ -23,6 +23,7 @@ class Vim;
     CGRect mCellScrollRect;
     NSPoint mCursorPos;
     NSPoint mCursorDisplayPos;
+    NSPoint mLastShownCursorPos;
 }
 
 - (void)cutText;
